@@ -195,7 +195,8 @@ bool WebsocketProtocol::OpenAudioChannel() {
     if (on_audio_channel_opened_ != nullptr) {
         on_audio_channel_opened_();
     }
-
+    Application::GetInstance().PlaySound(Lang::Sounds::OGG_SUCCESS_CONNECT);
+    vTaskDelay(pdMS_TO_TICKS(1000));
     return true;
 }
 

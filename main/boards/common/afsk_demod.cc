@@ -3,7 +3,8 @@
 #include <algorithm>
 #include "esp_log.h"
 #include "display.h"
-
+#include "application.h"
+#include "assets/lang_config.h"
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
@@ -89,7 +90,7 @@ namespace audio_wifi_config
                         ESP_LOGE(kLogTag, "Invalid data format, no newline character found");
                         continue;
                     }
-                    
+                    Application::GetInstance().PlaySound(Lang::Sounds::OGG_SONIC_GET_WIFI);
                     if (wifi_ap->ConnectToWifi(wifi_ssid, wifi_password)) {
                         wifi_ap->Save(wifi_ssid, wifi_password);  // Save WiFi credentials
                         esp_restart();                            // Restart device to apply new WiFi configuration

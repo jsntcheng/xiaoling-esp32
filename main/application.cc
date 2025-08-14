@@ -14,7 +14,7 @@
 #include <cJSON.h>
 #include <driver/gpio.h>
 #include <arpa/inet.h>
-
+#include "iot/thing_manager.h"
 #define TAG "Application"
 
 
@@ -77,7 +77,7 @@ void Application::CheckNewVersion(Ota& ota) {
         SetDeviceState(kDeviceStateActivating);
         auto display = board.GetDisplay();
         display->SetStatus(Lang::Strings::CHECKING_NEW_VERSION);
-
+        PlaySound(Lang::Sounds::OGG_CHECK);
         if (!ota.CheckVersion()) {
             retry_count++;
             if (retry_count >= MAX_RETRY) {
@@ -249,11 +249,17 @@ void Application::ToggleChatState() {
         Schedule([this]() {
             if (!protocol_->IsAudioChannelOpened()) {
                 SetDeviceState(kDeviceStateConnecting);
+                is_first_connect = true;
                 if (!protocol_->OpenAudioChannel()) {
                     return;
                 }
             }
-
+            
+            if (is_first_connect){
+                ESP_LOGE(TAG, "111");
+                return;
+            }
+            ESP_LOGE(TAG, "222");
             SetListeningMode(aec_mode_ == kAecOff ? kListeningModeAutoStop : kListeningModeRealtime);
         });
     } else if (device_state_ == kDeviceStateSpeaking) {
@@ -261,6 +267,12 @@ void Application::ToggleChatState() {
             AbortSpeaking(kAbortReasonNone);
         });
     } else if (device_state_ == kDeviceStateListening) {
+        if (is_first_connect){
+            is_first_connect = false;
+            ESP_LOGE(TAG, "333");
+            return;
+        }
+        ESP_LOGE(TAG, "444");
         Schedule([this]() {
             protocol_->CloseAudioChannel();
         });
@@ -290,7 +302,9 @@ void Application::StartListening() {
                     return;
                 }
             }
-
+            if (is_first_connect){
+                return;
+            }
             SetListeningMode(kListeningModeManualStop);
         });
     } else if (device_state_ == kDeviceStateSpeaking) {
@@ -300,7 +314,36 @@ void Application::StartListening() {
         });
     }
 }
+void Application::PlayDigitsFromString(const std::string& str) {
+    // 播报数字音频映射表
+    struct digit_sound {
+        char digit;
+        const std::string_view& sound;
+    };
+    static const std::array<digit_sound, 10> digit_sounds{{
+        digit_sound{'0', Lang::Sounds::OGG_0},
+        digit_sound{'1', Lang::Sounds::OGG_1}, 
+        digit_sound{'2', Lang::Sounds::OGG_2},
+        digit_sound{'3', Lang::Sounds::OGG_3},
+        digit_sound{'4', Lang::Sounds::OGG_4},
+        digit_sound{'5', Lang::Sounds::OGG_5},
+        digit_sound{'6', Lang::Sounds::OGG_6},
+        digit_sound{'7', Lang::Sounds::OGG_7},
+        digit_sound{'8', Lang::Sounds::OGG_8},
+        digit_sound{'9', Lang::Sounds::OGG_9}
+    }};
 
+    // 遍历字符串，遇到数字就播报
+    for (const char c : str) {
+        if (c >= '0' && c <= '9') {
+            auto it = std::find_if(digit_sounds.begin(), digit_sounds.end(),
+                [c](const digit_sound& ds) { return ds.digit == c; });
+            if (it != digit_sounds.end()) {
+                PlaySound(it->sound);
+            }
+        }
+    }
+}
 void Application::StopListening() {
     if (device_state_ == kDeviceStateAudioTesting) {
         audio_service_.EnableAudioTesting(false);
@@ -322,6 +365,7 @@ void Application::StopListening() {
         if (device_state_ == kDeviceStateListening) {
             protocol_->SendStopListening();
             SetDeviceState(kDeviceStateIdle);
+            PlaySound(Lang::Sounds::OGG_PUSH_MESSAGE);
         }
     });
 }
@@ -393,6 +437,12 @@ void Application::Start() {
             ESP_LOGW(TAG, "Server sample rate %d does not match device output sample rate %d, resampling may cause distortion",
                 protocol_->server_sample_rate(), codec->output_sample_rate());
         }
+        auto& thing_manager = iot::ThingManager::GetInstance();
+        protocol_->SendIotDescriptors(thing_manager.GetDescriptorsJson());
+        std::string states;
+        if (thing_manager.GetStatesJson(states, false)) {
+            protocol_->SendIotStates(states);
+        }
     });
     protocol_->OnAudioChannelClosed([this, &board]() {
         board.SetPowerSaveMode(true);
@@ -453,7 +503,16 @@ void Application::Start() {
             if (cJSON_IsObject(payload)) {
                 McpServer::GetInstance().ParseMessage(payload);
             }
-        } else if (strcmp(type->valuestring, "system") == 0) {
+        } else if (strcmp(type->valuestring, "iot") == 0) {
+            auto commands = cJSON_GetObjectItem(root, "commands");
+            if (commands != NULL) {
+                auto& thing_manager = iot::ThingManager::GetInstance();
+                for (int i = 0; i < cJSON_GetArraySize(commands); ++i) {
+                    auto command = cJSON_GetArrayItem(commands, i);
+                    thing_manager.Invoke(command);
+                }
+            }
+        }  else if (strcmp(type->valuestring, "system") == 0) {
             auto command = cJSON_GetObjectItem(root, "command");
             if (cJSON_IsString(command)) {
                 ESP_LOGI(TAG, "System command: %s", command->valuestring);
@@ -659,9 +718,13 @@ void Application::SetDeviceState(DeviceState state) {
             display->SetChatMessage("system", "");
             break;
         case kDeviceStateListening:
+            if(is_first_connect){
+                is_first_connect = false;
+                break;
+            }
             display->SetStatus(Lang::Strings::LISTENING);
             display->SetEmotion("neutral");
-
+            UpdateIotStates();
             // Make sure the audio processor is running
             if (!audio_service_.IsAudioProcessorRunning()) {
                 // Send the start listening command
@@ -689,7 +752,13 @@ void Application::SetDeviceState(DeviceState state) {
             break;
     }
 }
-
+void Application::UpdateIotStates() {
+    auto& thing_manager = iot::ThingManager::GetInstance();
+    std::string states;
+    if (thing_manager.GetStatesJson(states, true)) {
+        protocol_->SendIotStates(states);
+    }
+}
 void Application::Reboot() {
     ESP_LOGI(TAG, "Rebooting...");
     esp_restart();

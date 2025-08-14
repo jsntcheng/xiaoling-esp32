@@ -59,8 +59,9 @@ public:
     void SetAecMode(AecMode mode);
     AecMode GetAecMode() const { return aec_mode_; }
     void PlaySound(const std::string_view& sound);
+    void PlayDigitsFromString(const std::string& str);
     AudioService& GetAudioService() { return audio_service_; }
-
+    void UpdateIotStates();
 private:
     Application();
     ~Application();
@@ -75,7 +76,7 @@ private:
     AecMode aec_mode_ = kAecOff;
     std::string last_error_message_;
     AudioService audio_service_;
-
+    bool is_first_connect = false;
     bool has_server_time_ = false;
     bool aborted_ = false;
     int clock_ticks_ = 0;

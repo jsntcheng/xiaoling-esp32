@@ -288,6 +288,9 @@ choice BOARD_TYPE
     config BOARD_TYPE_XINGZHI_Cube_1_54TFT_ML307
         bool "无名科技星智1.54(ML307)"
         depends on IDF_TARGET_ESP32S3
+    config BOARD_TYPE_XIAOLING_C3_WIFI
+        bool "灵镜小灵C3"
+        depends on IDF_TARGET_ESP32C3
     config BOARD_TYPE_SENSECAP_WATCHER
         bool "SenseCAP Watcher"
         depends on IDF_TARGET_ESP32S3

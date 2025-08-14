@@ -20,6 +20,8 @@ set(SOURCES "audio/audio_codec.cc"
             "mcp_server.cc"
             "system_info.cc"
             "application.cc"
+            "iot/thing.cc"
+            "iot/thing_manager.cc"
             "ota.cc"
             "settings.cc"
             "device_state_event.cc"
@@ -27,7 +29,9 @@ set(SOURCES "audio/audio_codec.cc"
             )
 
 set(INCLUDE_DIRS "." "display" "audio" "protocols")
-
+# 添加 IOT 相关文件
+file(GLOB IOT_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/iot/things/*.cc)
+list(APPEND SOURCES ${IOT_SOURCES})
 # 添加板级公共文件
 file(GLOB BOARD_COMMON_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/boards/common/*.cc)
 list(APPEND SOURCES ${BOARD_COMMON_SOURCES})
@@ -94,6 +98,8 @@ elseif(CONFIG_BOARD_TYPE_XMINI_C3_4G)
     set(BOARD_TYPE "xmini-c3-4g")
 elseif(CONFIG_BOARD_TYPE_XMINI_C3)
     set(BOARD_TYPE "xmini-c3")
+elseif(CONFIG_BOARD_TYPE_XIAOLING_C3_WIFI)
+    set(BOARD_TYPE "xiaoling_c3_wifi")
 elseif(CONFIG_BOARD_TYPE_ESP32S3_KORVO2_V3)
     set(BOARD_TYPE "esp32s3-korvo2-v3")
 elseif(CONFIG_BOARD_TYPE_ESP_SPARKBOT)
