@@ -180,9 +180,7 @@ bool WebsocketProtocol::OpenAudioChannel() {
 
     // Send hello message to describe the client
     auto message = GetHelloMessage();
-    if (!SendText(message)) {
-        return false;
-    }
+    
 
     // Wait for server hello
     EventBits_t bits = xEventGroupWaitBits(event_group_handle_, WEBSOCKET_PROTOCOL_SERVER_HELLO_EVENT, pdTRUE, pdFALSE, pdMS_TO_TICKS(10000));
@@ -196,6 +194,9 @@ bool WebsocketProtocol::OpenAudioChannel() {
         on_audio_channel_opened_();
     }
     Application::GetInstance().PlaySound(Lang::Sounds::OGG_SUCCESS_CONNECT);
+    if (!SendText(message)) {
+        return false;
+    }
     vTaskDelay(pdMS_TO_TICKS(1000));
     return true;
 }

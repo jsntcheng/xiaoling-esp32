@@ -5,7 +5,7 @@
 #include <esp_timer.h>
 #include <driver/gpio.h>
 #include <esp_adc/adc_oneshot.h>
-
+#include "assets/lang_config.h"
 
 class PowerManager {
 private:
@@ -112,6 +112,9 @@ private:
         }
 
         ESP_LOGI("PowerManager", "ADC value: %d average: %ld level: %ld", adc_value, average_adc, battery_level_);
+        if(battery_level_ <= kLowBatteryLevel && battery_level_ > 0){
+            Application::GetInstance().PlaySound(Lang::Sounds::OGG_LOW_BATTERY);
+        }
     }
 
 public:

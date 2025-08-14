@@ -249,16 +249,16 @@ void Application::ToggleChatState() {
         Schedule([this]() {
             if (!protocol_->IsAudioChannelOpened()) {
                 SetDeviceState(kDeviceStateConnecting);
-                is_first_connect = true;
+                // is_first_connect = true;
                 if (!protocol_->OpenAudioChannel()) {
                     return;
                 }
             }
             
-            if (is_first_connect){
-                ESP_LOGE(TAG, "111");
-                return;
-            }
+            // if (is_first_connect){
+            //     ESP_LOGE(TAG, "111");
+            //     return;
+            // }
             ESP_LOGE(TAG, "222");
             SetListeningMode(aec_mode_ == kAecOff ? kListeningModeAutoStop : kListeningModeRealtime);
         });
@@ -267,11 +267,11 @@ void Application::ToggleChatState() {
             AbortSpeaking(kAbortReasonNone);
         });
     } else if (device_state_ == kDeviceStateListening) {
-        if (is_first_connect){
-            is_first_connect = false;
-            ESP_LOGE(TAG, "333");
-            return;
-        }
+        // if (is_first_connect){
+        //     is_first_connect = false;
+        //     ESP_LOGE(TAG, "333");
+        //     return;
+        // }
         ESP_LOGE(TAG, "444");
         Schedule([this]() {
             protocol_->CloseAudioChannel();
@@ -301,9 +301,6 @@ void Application::StartListening() {
                 if (!protocol_->OpenAudioChannel()) {
                     return;
                 }
-            }
-            if (is_first_connect){
-                return;
             }
             SetListeningMode(kListeningModeManualStop);
         });
@@ -718,19 +715,21 @@ void Application::SetDeviceState(DeviceState state) {
             display->SetChatMessage("system", "");
             break;
         case kDeviceStateListening:
-            if(is_first_connect){
-                is_first_connect = false;
-                break;
-            }
             display->SetStatus(Lang::Strings::LISTENING);
             display->SetEmotion("neutral");
             UpdateIotStates();
             // Make sure the audio processor is running
             if (!audio_service_.IsAudioProcessorRunning()) {
                 // Send the start listening command
-                protocol_->SendStartListening(listening_mode_);
-                audio_service_.EnableVoiceProcessing(true);
-                audio_service_.EnableWakeWordDetection(false);
+                if(is_first_connect==false){
+                    is_first_connect = true;
+                    audio_service_.EnableVoiceProcessing(true);
+                    audio_service_.EnableWakeWordDetection(false);
+                }
+                else{
+                    protocol_->SendStartListening(listening_mode_);
+                    audio_service_.EnableVoiceProcessing(true);
+                    audio_service_.EnableWakeWordDetection(false);}
             }
             break;
         case kDeviceStateSpeaking:
