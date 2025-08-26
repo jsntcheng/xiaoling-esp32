@@ -5,8 +5,7 @@
             "name": "xiaoling_c3_wifi",
             "sdkconfig_append": [
                 "CONFIG_PM_ENABLE=y",
-                "CONFIG_FREERTOS_USE_TICKLESS_IDLE=y",
-                "CONFIG_BOARD_TYPE_HIGHWALL_C3_ML307=y"
+                "CONFIG_FREERTOS_USE_TICKLESS_IDLE=y"
             ]
         }
     ]

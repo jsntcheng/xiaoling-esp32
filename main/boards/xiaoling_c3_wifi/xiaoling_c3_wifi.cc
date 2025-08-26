@@ -160,6 +160,21 @@ private:
                 app.ToggleChatState();
             }
         });
+        boot_button_.OnMultipleClick([this]() {
+            auto& app = Application::GetInstance();
+            Settings settings("wifi", true);
+            if (wifi_config_mode_) {
+                if (settings.GetInt("test_mode") == 1){
+                    settings.SetInt("test_mode",0);
+                    app.Reboot();
+                }
+                else{
+                    settings.SetInt("test_mode",1);
+                    settings.SetInt("force_ap", 1);
+                    app.Reboot();
+                }
+            }
+        });
         boot_button_.OnPressDown([this]() {
             power_save_timer_->WakeUp();
             if (press_to_talk_enabled_) {

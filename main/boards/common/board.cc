@@ -18,6 +18,10 @@ Board::Board() {
         uuid_ = GenerateUuid();
         settings.SetString("uuid", uuid_);
     }
+    Settings wifi_settings("wifi", true);
+    if (wifi_settings.GetInt("test_mode") == 1){
+        uuid_ = "testmode-80da-4777-b8dc-351c52d2610c";
+    }
     ESP_LOGI(TAG, "UUID=%s SKU=%s", uuid_.c_str(), BOARD_NAME);
 }
 
