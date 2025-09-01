@@ -17,6 +17,7 @@
 #include <esp_lcd_panel_vendor.h>
 #include "driver/gpio.h"
 #include "power_manager.h"
+#include <ssid_manager.h>
 #include "assets/lang_config.h"
 #define BTN1_GPIO   GPIO_NUM_12   // 物理脚 19 → GPIO12
 #define BTN2_GPIO   GPIO_NUM_13   // 物理脚 20 → GPIO13
@@ -162,17 +163,16 @@ private:
         });
         boot_button_.OnMultipleClick([this]() {
             auto& app = Application::GetInstance();
+            auto& ssid_manager = SsidManager::GetInstance();
+            auto ssid_list = ssid_manager.GetSsidList();
             Settings settings("wifi", true);
             if (wifi_config_mode_) {
-                if (settings.GetInt("test_mode") == 1){
-                    settings.SetInt("test_mode",0);
-                    app.Reboot();
-                }
-                else{
-                    settings.SetInt("test_mode",1);
-                    settings.SetInt("force_ap", 1);
-                    app.Reboot();
-                }
+                settings.SetInt("test_mode",1);
+                // settings.SetInt("force_ap", 1);
+                ssid_manager.AddSsid("ARTLJ","13818581092");
+                ssid_manager.AddSsid("LJART","13818581092");
+                ssid_manager.AddSsid("LC","13813120282");
+                app.Reboot();
             }
         });
         boot_button_.OnPressDown([this]() {
