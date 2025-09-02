@@ -15,8 +15,7 @@ HEADER_TEMPLATE = """// Auto-generated language config
 
 namespace Lang {{
     // 语言元数据
-    constexpr const char* CODE = "{lang_code}";
-
+    inline std::string CODE = "{lang_code}";
     // 字符串资源 (en-US as fallback for missing keys)
     namespace Strings {{
 {strings}
@@ -109,12 +108,12 @@ def generate_header(lang_code, output_path):
     current_lang_dir = os.path.join(assets_dir, 'locales', lang_code)
     base_lang_dir = os.path.join(assets_dir, 'locales', 'en-US')
     common_dir = os.path.join(assets_dir, 'common')
-    
+    multi_dir = os.path.join(assets_dir, 'multi')
     # 获取所有可能的音效文件
     base_sounds = get_sound_files(base_lang_dir)
     current_sounds = get_sound_files(current_lang_dir)
     common_sounds = get_sound_files(common_dir)
-    
+    multi_sounds = get_sound_files(multi_dir)
     # 合并音效文件列表：用户语言覆盖基准语言
     all_sound_files = set(base_sounds)
     all_sound_files.update(current_sounds)
@@ -151,6 +150,16 @@ def generate_header(lang_code, output_path):
     
     # 生成公共音效常量
     for file in sorted(common_sounds):
+        base_name = os.path.splitext(file)[0]
+        sounds.append(f'''
+        extern const char ogg_{base_name}_start[] asm("_binary_{base_name}_ogg_start");
+        extern const char ogg_{base_name}_end[] asm("_binary_{base_name}_ogg_end");
+        static const std::string_view OGG_{base_name.upper()} {{
+        static_cast<const char*>(ogg_{base_name}_start),
+        static_cast<size_t>(ogg_{base_name}_end - ogg_{base_name}_start)
+        }};''')
+    
+    for file in sorted(multi_sounds):
         base_name = os.path.splitext(file)[0]
         sounds.append(f'''
         extern const char ogg_{base_name}_start[] asm("_binary_{base_name}_ogg_start");

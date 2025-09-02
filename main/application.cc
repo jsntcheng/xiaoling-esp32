@@ -7,7 +7,9 @@
 #include "websocket_protocol.h"
 #include "assets/lang_config.h"
 #include "mcp_server.h"
-
+#include <nvs.h>
+#include <nvs_flash.h>
+#include <map>
 #include <cstring>
 #include <esp_log.h>
 #include <cJSON.h>
@@ -34,6 +36,20 @@ static const char* const STATE_STRINGS[] = {
 };
 
 Application::Application() {
+    nvs_handle_t nvs;
+    esp_err_t err = nvs_open("wifi", NVS_READONLY, &nvs);
+    // 读取固件语言
+    char firmware_lang[256] = {0};
+    size_t firmware_lang_size = sizeof(firmware_lang);
+    err = nvs_get_str(nvs, "firmware_lang", firmware_lang, &firmware_lang_size);
+    nvs_close(nvs);
+    if (err == ESP_OK) {
+        language_code = firmware_lang;
+        ESP_LOGI(TAG,"firmware_lang");
+    }
+    else{
+        ESP_LOGI(TAG,"NVS: Failed to read firmware_lang");
+    }
     event_group_ = xEventGroupCreate();
 
 #if CONFIG_USE_DEVICE_AEC && CONFIG_USE_SERVER_AEC
@@ -200,7 +216,7 @@ void Application::ShowActivationCode(const std::string& code, const std::string&
         auto it = std::find_if(digit_sounds.begin(), digit_sounds.end(),
             [digit](const digit_sound& ds) { return ds.digit == digit; });
         if (it != digit_sounds.end()) {
-            audio_service_.PlaySound(it->sound);
+            PlaySound(it->sound);
         }
     }
 }
@@ -212,7 +228,7 @@ void Application::Alert(const char* status, const char* message, const char* emo
     display->SetEmotion(emotion);
     display->SetChatMessage("system", message);
     if (!sound.empty()) {
-        audio_service_.PlaySound(sound);
+        PlaySound(sound);
     }
 }
 
@@ -560,7 +576,7 @@ void Application::Start() {
         display->ShowNotification(message.c_str());
         display->SetChatMessage("system", "");
         // Play the success sound to indicate the device is ready
-        audio_service_.PlaySound(Lang::Sounds::OGG_SUCCESS);
+        PlaySound(Lang::Sounds::OGG_SUCCESS);
     }
 
     // Print heap stats
@@ -667,7 +683,7 @@ void Application::OnWakeWordDetected() {
 #else
         SetListeningMode(aec_mode_ == kAecOff ? kListeningModeAutoStop : kListeningModeRealtime);
         // Play the pop up sound to indicate the wake word is detected
-        audio_service_.PlaySound(Lang::Sounds::OGG_POPUP);
+        PlaySound(Lang::Sounds::OGG_POPUP);
 #endif
     } else if (device_state_ == kDeviceStateSpeaking) {
         AbortSpeaking(kAbortReasonWakeWordDetected);
@@ -840,5 +856,53 @@ void Application::SetAecMode(AecMode mode) {
 }
 
 void Application::PlaySound(const std::string_view& sound) {
-    audio_service_.PlaySound(sound);
+    // 先默认播放传入的通用音效
+    std::string_view sound_to_play = sound;
+
+    // 用“内容”而不是“地址”作为键：按字符串内容比较，避免跨翻译单元的地址不一致问题
+    static const std::map<std::string_view, std::map<std::string, std::string_view>, std::less<>> multi_lang_sounds = {
+        {Lang::Sounds::OGG_ACTIVATION, {{"zh-CN", Lang::Sounds::OGG_ACTIVATION_ZH_CN}, {"ja-JP", Lang::Sounds::OGG_ACTIVATION_JA_JP}, {"en-US", Lang::Sounds::OGG_ACTIVATION_EN_US}}},
+        {Lang::Sounds::OGG_CHECK, {{"zh-CN", Lang::Sounds::OGG_CHECK_ZH_CN}, {"ja-JP", Lang::Sounds::OGG_CHECK_JA_JP}, {"en-US", Lang::Sounds::OGG_CHECK_EN_US}}},
+        {Lang::Sounds::OGG_CONNECT4G, {{"zh-CN", Lang::Sounds::OGG_CONNECT4G_ZH_CN}, {"ja-JP", Lang::Sounds::OGG_CONNECT4G_JA_JP}, {"en-US", Lang::Sounds::OGG_CONNECT4G_EN_US}}},
+        {Lang::Sounds::OGG_CONNECTWIFI, {{"zh-CN", Lang::Sounds::OGG_CONNECTWIFI_ZH_CN}, {"ja-JP", Lang::Sounds::OGG_CONNECTWIFI_JA_JP}, {"en-US", Lang::Sounds::OGG_CONNECTWIFI_EN_US}}},
+        {Lang::Sounds::OGG_ENTER_SLEEP, {{"zh-CN", Lang::Sounds::OGG_ENTER_SLEEP_ZH_CN}, {"ja-JP", Lang::Sounds::OGG_ENTER_SLEEP_JA_JP}, {"en-US", Lang::Sounds::OGG_ENTER_SLEEP_EN_US}}},
+        {Lang::Sounds::OGG_ERR_PIN, {{"zh-CN", Lang::Sounds::OGG_ERR_PIN_ZH_CN}, {"ja-JP", Lang::Sounds::OGG_ERR_PIN_JA_JP}, {"en-US", Lang::Sounds::OGG_ERR_PIN_EN_US}}},
+        {Lang::Sounds::OGG_ERR_REG, {{"zh-CN", Lang::Sounds::OGG_ERR_REG_ZH_CN}, {"ja-JP", Lang::Sounds::OGG_ERR_REG_JA_JP}, {"en-US", Lang::Sounds::OGG_ERR_REG_EN_US}}},
+        {Lang::Sounds::OGG_EXCLAMATION, {{"zh-CN", Lang::Sounds::OGG_EXCLAMATION_ZH_CN}, {"ja-JP", Lang::Sounds::OGG_EXCLAMATION_JA_JP}, {"en-US", Lang::Sounds::OGG_EXCLAMATION_EN_US}}},
+        {Lang::Sounds::OGG_LOW_BATTERY, {{"zh-CN", Lang::Sounds::OGG_LOW_BATTERY_ZH_CN}, {"ja-JP", Lang::Sounds::OGG_LOW_BATTERY_JA_JP}, {"en-US", Lang::Sounds::OGG_LOW_BATTERY_EN_US}}},
+        {Lang::Sounds::OGG_SONIC_GET_WIFI, {{"zh-CN", Lang::Sounds::OGG_SONIC_GET_WIFI_ZH_CN}, {"ja-JP", Lang::Sounds::OGG_SONIC_GET_WIFI_JA_JP}, {"en-US", Lang::Sounds::OGG_SONIC_GET_WIFI_EN_US}}},
+        {Lang::Sounds::OGG_SUCCESS, {{"zh-CN", Lang::Sounds::OGG_SUCCESS_ZH_CN}, {"ja-JP", Lang::Sounds::OGG_SUCCESS_JA_JP}, {"en-US", Lang::Sounds::OGG_SUCCESS_EN_US}}},
+        {Lang::Sounds::OGG_SWITCH4G, {{"zh-CN", Lang::Sounds::OGG_SWITCH4G_ZH_CN}, {"ja-JP", Lang::Sounds::OGG_SWITCH4G_JA_JP}, {"en-US", Lang::Sounds::OGG_SWITCH4G_EN_US}}},
+        {Lang::Sounds::OGG_SWITCHWIFI, {{"zh-CN", Lang::Sounds::OGG_SWITCHWIFI_ZH_CN}, {"ja-JP", Lang::Sounds::OGG_SWITCHWIFI_JA_JP}, {"en-US", Lang::Sounds::OGG_SWITCHWIFI_EN_US}}},
+        {Lang::Sounds::OGG_UPGRADE, {{"zh-CN", Lang::Sounds::OGG_UPGRADE_ZH_CN}, {"ja-JP", Lang::Sounds::OGG_UPGRADE_JA_JP}, {"en-US", Lang::Sounds::OGG_UPGRADE_EN_US}}},
+        {Lang::Sounds::OGG_WELCOME, {{"zh-CN", Lang::Sounds::OGG_WELCOME_ZH_CN}, {"ja-JP", Lang::Sounds::OGG_WELCOME_JA_JP}, {"en-US", Lang::Sounds::OGG_WELCOME_EN_US}}},
+        {Lang::Sounds::OGG_WIFICONFIG, {{"zh-CN", Lang::Sounds::OGG_WIFICONFIG_ZH_CN}, {"ja-JP", Lang::Sounds::OGG_WIFICONFIG_JA_JP}, {"en-US", Lang::Sounds::OGG_WIFICONFIG_EN_US}}},
+        {Lang::Sounds::OGG_0, {{"zh-CN", Lang::Sounds::OGG_0_ZH_CN}, {"ja-JP", Lang::Sounds::OGG_0_JA_JP}, {"en-US", Lang::Sounds::OGG_0_EN_US}}},
+        {Lang::Sounds::OGG_1, {{"zh-CN", Lang::Sounds::OGG_1_ZH_CN}, {"ja-JP", Lang::Sounds::OGG_1_JA_JP}, {"en-US", Lang::Sounds::OGG_1_EN_US}}},
+        {Lang::Sounds::OGG_2, {{"zh-CN", Lang::Sounds::OGG_2_ZH_CN}, {"ja-JP", Lang::Sounds::OGG_2_JA_JP}, {"en-US", Lang::Sounds::OGG_2_EN_US}}},
+        {Lang::Sounds::OGG_3, {{"zh-CN", Lang::Sounds::OGG_3_ZH_CN}, {"ja-JP", Lang::Sounds::OGG_3_JA_JP}, {"en-US", Lang::Sounds::OGG_3_EN_US}}},
+        {Lang::Sounds::OGG_4, {{"zh-CN", Lang::Sounds::OGG_4_ZH_CN}, {"ja-JP", Lang::Sounds::OGG_4_JA_JP}, {"en-US", Lang::Sounds::OGG_4_EN_US}}},
+        {Lang::Sounds::OGG_5, {{"zh-CN", Lang::Sounds::OGG_5_ZH_CN}, {"ja-JP", Lang::Sounds::OGG_5_JA_JP}, {"en-US", Lang::Sounds::OGG_5_EN_US}}},
+        {Lang::Sounds::OGG_6, {{"zh-CN", Lang::Sounds::OGG_6_ZH_CN}, {"ja-JP", Lang::Sounds::OGG_6_JA_JP}, {"en-US", Lang::Sounds::OGG_6_EN_US}}},
+        {Lang::Sounds::OGG_7, {{"zh-CN", Lang::Sounds::OGG_7_ZH_CN}, {"ja-JP", Lang::Sounds::OGG_7_JA_JP}, {"en-US", Lang::Sounds::OGG_7_EN_US}}},
+        {Lang::Sounds::OGG_8, {{"zh-CN", Lang::Sounds::OGG_8_ZH_CN}, {"ja-JP", Lang::Sounds::OGG_8_JA_JP}, {"en-US", Lang::Sounds::OGG_8_EN_US}}},
+        {Lang::Sounds::OGG_9, {{"zh-CN", Lang::Sounds::OGG_9_ZH_CN}, {"ja-JP", Lang::Sounds::OGG_9_JA_JP}, {"en-US", Lang::Sounds::OGG_9_EN_US}}}
+    };
+
+    auto it = multi_lang_sounds.find(sound);
+    if (it != multi_lang_sounds.end()) {
+        ESP_LOGI(TAG, "Looking for language code: %s", language_code.c_str());
+        auto lang_it = it->second.find(language_code);
+        if (lang_it != it->second.end()) {
+            // 如有对应语言版本且非空，则覆盖为语言版音效
+            if (!lang_it->second.empty()) {
+                sound_to_play = lang_it->second;
+            }
+        }
+    } else {
+        // 找不到该通用音效的多语言映射，使用通用音效
+        ESP_LOGI(TAG, "No language-specific mapping for this sound, using generic sound.");
+    }
+
+    audio_service_.PlaySound(sound_to_play);
 }

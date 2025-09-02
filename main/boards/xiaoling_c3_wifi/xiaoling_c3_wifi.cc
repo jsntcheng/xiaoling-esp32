@@ -8,7 +8,8 @@
 #include "settings.h"
 #include "config.h"
 #include "power_save_timer.h"
-#include "font_awesome_symbols.h"
+// #include "font_awesome_symbols.h"
+#include <esp_wifi.h>
 #include <wifi_station.h>
 #include <esp_log.h>
 #include <esp_efuse_table.h>
@@ -19,9 +20,11 @@
 #include "power_manager.h"
 #include <ssid_manager.h>
 #include "assets/lang_config.h"
+#include <esp_sleep.h>
+#include "driver/rtc_io.h"
 #define BTN1_GPIO   GPIO_NUM_12   // 物理脚 19 → GPIO12
 #define BTN2_GPIO   GPIO_NUM_13   // 物理脚 20 → GPIO13
-
+#define WAKE_GPIO GPIO_NUM_0
 #define TAG "XIAOLING_C3_WIFI"
 LV_FONT_DECLARE(font_puhui_14_1);
 LV_FONT_DECLARE(font_awesome_14_1);
@@ -42,7 +45,7 @@ private:
     PowerManager *power_manager_;
 
     void InitializePowerManager() {
-        power_manager_ = new PowerManager(GPIO_NUM_0);
+        power_manager_ = new PowerManager(GPIO_NUM_1);
         power_manager_->OnChargingStatusChanged([this](bool is_charging) {
             if (is_charging) {
                 power_save_timer_->SetEnabled(false);
@@ -51,30 +54,72 @@ private:
             } 
         });
     }
-    
+    // 声明两个任务函数
+    static void EnterSleepTask(void* pv) {
+        auto self = static_cast<XiaolingC3WifiBoard*>(pv);
+        ESP_LOGI(TAG, "Enabling sleep mode");
+        
+        auto display = self->GetDisplay();
+        display->SetChatMessage("system", "");
+        display->SetEmotion("sleepy");
+        Application::GetInstance().PlaySound(Lang::Sounds::OGG_ENTER_SLEEP);
+        vTaskDelay(pdMS_TO_TICKS(5000));
+        auto codec = self->GetAudioCodec();
+        codec->EnableInput(false);
+        codec->EnableOutput(false);
+
+        // 如果 PlaySound 是非阻塞的，这里用延时或等“播放完成”事件
+        
+        vTaskDelete(nullptr);
+    }
+
+    static void ExitSleepTask(void* pv) {
+        auto self = static_cast<XiaolingC3WifiBoard*>(pv);
+        auto codec = self->GetAudioCodec();
+        codec->EnableInput(true);
+        codec->EnableOutput(true);
+        auto display = self->GetDisplay();
+        display->SetChatMessage("system", "");
+        display->SetEmotion("neutral");
+        vTaskDelete(nullptr);
+    }
+
     void InitializePowerSaveTimer() {
-        power_save_timer_ = new PowerSaveTimer(160, 60);
+        power_save_timer_ = new PowerSaveTimer(80, 10, 50);
         power_save_timer_->OnEnterSleepMode([this]() {
-            ESP_LOGI(TAG, "Enabling sleep mode");
-            auto display = GetDisplay();
-            display->SetChatMessage("system", "");
-            display->SetEmotion("sleepy");
-            Application::GetInstance().PlaySound(Lang::Sounds::OGG_ENTER_SLEEP);
-            vTaskDelay(pdMS_TO_TICKS(5000));
-            auto codec = GetAudioCodec();
-            codec->EnableInput(false);
-            codec->EnableOutput(false);
+            // 只移交工作，立刻返回
+            xTaskCreate(EnterSleepTask, "enter_sleep",
+                        16384 /*按需调大*/, this, 5, nullptr);
         });
         power_save_timer_->OnExitSleepMode([this]() {
-            auto codec = GetAudioCodec();
-            codec->EnableInput(true);
-            codec->EnableOutput(true);
-            auto display = GetDisplay();
-            display->SetChatMessage("system", "");
-            display->SetEmotion("neutral");
+            xTaskCreate(ExitSleepTask, "exit_sleep",
+                        4096 /*按需*/, this, 5, nullptr);
         });
         power_save_timer_->SetEnabled(true);
     }
+    // void InitializePowerSaveTimer() {
+    //     power_save_timer_ = new PowerSaveTimer(160, 60);
+    //     power_save_timer_->OnEnterSleepMode([this]() {
+    //         ESP_LOGI(TAG, "Enabling sleep mode");
+    //         auto display = GetDisplay();
+    //         display->SetChatMessage("system", "");
+    //         display->SetEmotion("sleepy");
+    //         Application::GetInstance().PlaySound(Lang::Sounds::OGG_ENTER_SLEEP);
+    //         vTaskDelay(pdMS_TO_TICKS(5000));
+    //         auto codec = GetAudioCodec();
+    //         codec->EnableInput(false);
+    //         codec->EnableOutput(false);
+    //     });
+    //     power_save_timer_->OnExitSleepMode([this]() {
+    //         auto codec = GetAudioCodec();
+    //         codec->EnableInput(true);
+    //         codec->EnableOutput(true);
+    //         auto display = GetDisplay();
+    //         display->SetChatMessage("system", "");
+    //         display->SetEmotion("neutral");
+    //     });
+    //     power_save_timer_->SetEnabled(true);
+    // }
 
     void InitializeCodecI2c() {
         // Initialize I2C peripheral

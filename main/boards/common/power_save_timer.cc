@@ -3,6 +3,7 @@
 #include "settings.h"
 
 #include <esp_log.h>
+#include <esp_wifi.h>
 
 #define TAG "PowerSaveTimer"
 
@@ -75,6 +76,8 @@ void PowerSaveTimer::PowerSaveCheck() {
                 on_enter_sleep_mode_();
             }
 
+            esp_wifi_set_ps(WIFI_PS_MAX_MODEM);
+
             if (cpu_max_freq_ != -1) {
                 // Disable wake word detection
                 auto& audio_service = app.GetAudioService();
@@ -109,9 +112,11 @@ void PowerSaveTimer::WakeUp() {
         ESP_LOGI(TAG, "Exiting power save mode");
         in_sleep_mode_ = false;
 
+        esp_wifi_set_ps(WIFI_PS_NONE);
+
         if (cpu_max_freq_ != -1) {
             esp_pm_config_t pm_config = {
-                .max_freq_mhz = cpu_max_freq_,
+                .max_freq_mhz = 160,
                 .min_freq_mhz = cpu_max_freq_,
                 .light_sleep_enable = false,
             };

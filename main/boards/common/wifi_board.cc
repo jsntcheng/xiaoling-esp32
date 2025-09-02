@@ -29,7 +29,6 @@ WifiBoard::WifiBoard() {
     auto& application = Application::GetInstance();
     if (settings.GetInt("test_mode")==1 || settings.GetInt("test_mode")==2){
         settings.SetInt("test_mode", 2);
-        application.PlaySound(Lang::Sounds::OGG_TESTMODE);
     }
 }
 
@@ -40,9 +39,13 @@ std::string WifiBoard::GetBoardType() {
 void WifiBoard::EnterWifiConfigMode() {
     auto& application = Application::GetInstance();
     application.SetDeviceState(kDeviceStateWifiConfiguring);
-
+    Settings settings("wifi", true);
+    if (settings.GetInt("test_mode")==1 || settings.GetInt("test_mode")==2){
+        settings.SetInt("test_mode", 2);
+        application.PlaySound(Lang::Sounds::OGG_TESTMODE);
+    }
     auto& wifi_ap = WifiConfigurationAp::GetInstance();
-    wifi_ap.SetLanguage(Lang::CODE);
+    wifi_ap.SetLanguage(std::string(Lang::CODE));
     wifi_ap.SetSsidPrefix("Xiaoling");
     wifi_ap.Start();
 
@@ -55,6 +58,7 @@ void WifiBoard::EnterWifiConfigMode() {
     hint += "\n\n";
     
     // 播报配置 WiFi 的提示
+    // application.PlaySound(Lang::Sounds::OGG_WIFICONFIG);
     application.Alert(Lang::Strings::WIFI_CONFIG_MODE, hint.c_str(), "gear", Lang::Sounds::OGG_WIFICONFIG);
     application.PlayDigitsFromString(wifi_ssid);
     #if CONFIG_USE_ACOUSTIC_WIFI_PROVISIONING
@@ -88,6 +92,12 @@ void WifiBoard::StartNetwork() {
         wifi_config_mode_ = true;
         EnterWifiConfigMode();
         return;
+    }
+    auto& application = Application::GetInstance();
+    Settings settings("wifi", true);
+    if (settings.GetInt("test_mode")==1 || settings.GetInt("test_mode")==2){
+        settings.SetInt("test_mode", 2);
+        application.PlaySound(Lang::Sounds::OGG_TESTMODE);
     }
     Application::GetInstance().PlaySound(Lang::Sounds::OGG_CONNECTWIFI);
     auto& wifi_station = WifiStation::GetInstance();
